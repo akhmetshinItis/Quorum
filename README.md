@@ -16,25 +16,15 @@
    - Данные: ConcurrentDictionary<string, string> (key-value хранилище).  
    - Лог операций: List<LogEntry> (для репликации).  
 
-2. 
-
-3. API для клиентов:  
+2. API для клиентов:  
    - POST /write (ключ, значение) → запись через лидера.  
    - GET /read?key=abc → чтение с проверкой кворума.  
    - GET /status → текущая роль узла (Leader/Follower).  
 
-4. Фоновые процессы:  
+3. Фоновые процессы:  
    - Таймер выборов (переход в Candidate при отсутствии heartbeat).  
    - Таймер heartbeat (лидер шлет пустые `AppendEntries`).  
 
-#### Пример структуры узла:  
-public class RaftNode {
-    public Guid NodeId { get; }
-    public NodeState State { get; set; } // Leader/Follower/Candidate
-    public int CurrentTerm { get; set; }
-    public ConcurrentDictionary<string, string> Data { get; } // In-memory "БД"
-    public List<LogEntry> Log { get; } // Для репликации
-}
 #### Отказоустойчивость:  
 - При падении лидера — автоматические перевыборы.  
 - При потере кворума — запись недоступна, чтение возможно из актуальных узлов.  
