@@ -1,4 +1,5 @@
-﻿using System.Text.Json;
+﻿using System.Net;
+using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -12,6 +13,7 @@ public class RaftService
     private readonly HttpClient _httpClient;
     private readonly RaftNode _raftNode;
     private int _logId;
+    public int _lastCommittedIndex = 0;
 
     public RaftService(IOptions<RaftOptions> options, HttpClient httpClient)
     {
@@ -33,14 +35,44 @@ public class RaftService
     public async Task<List<LogEntry>> GetEntries(int index)
         => await Task.FromResult(_raftNode.Log.Skip(index + 1).ToList());
 
-    public async Task SendHeartbeat()
+    public async Task<bool> SendCommit()
     {
         if (_raftNode.Log.Count > 0)
+        {
+            var count = 0;
             foreach (var follower in _raftNode.Followers)
             {
-                await _httpClient.PostAsync($"http://localhost:{5000 + follower}/api/receive",
-                    JsonContent.Create(new List<LogEntry> { _raftNode.Log[^1] }));
+                var result = await _httpClient.PostAsync($"http://localhost:{5000 + follower}/api/receive", JsonContent.Create(new List<LogEntry>  {_raftNode.Log[^1]}));
+                count += result.IsSuccessStatusCode ? 1 : 0;
             }
+            return count > 2;
+        }
+        return true;
+    }
+
+    public async Task<bool> SendHeartbeat()
+    {
+        var count = 0;
+        if (_raftNode.Log.Count > 0)
+        {
+            foreach (var follower in _raftNode.Followers)
+            {
+                HttpResponseMessage result = new HttpResponseMessage();
+                result.StatusCode = HttpStatusCode.BadRequest;
+                try
+                {
+                    result = await _httpClient.PostAsync($"http://localhost:{5000 + follower}/api/heartbeat",
+                        JsonContent.Create(new List<LogEntry> { _raftNode.Log[^1] }));
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error sending heartbeat to follower {follower}: {ex.Message}");
+                }
+                count += (bool)result?.IsSuccessStatusCode ? 1 : 0;
+            }
+            return count > 1;
+        }
+        return false;
     }
     
     public async Task ReceiveLogs(List<LogEntry> log)
@@ -74,5 +106,10 @@ public class RaftService
             else
                 _raftNode.Log.Add(log[0]);
         }
+    }
+
+    public void DeleteLastCommittedLog()
+    {
+        _raftNode.Log = _raftNode.Log.Take(_lastCommittedIndex + 1).ToList();
     }
 } 

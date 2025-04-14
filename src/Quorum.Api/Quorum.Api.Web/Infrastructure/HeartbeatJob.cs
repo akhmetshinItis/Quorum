@@ -7,7 +7,28 @@ public class HeartbeatJob(RaftService raftService) : IJob
 {
     public async Task Execute(IJobExecutionContext context)
     {
-        // Console.WriteLine($"HeartbeatJob executed at: [{DateTime.Now}]");
-        await raftService.SendHeartbeat();
+        bool res = false;
+        try
+        {
+            res = await raftService.SendHeartbeat();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine(ex.Message);
+        }
+        finally
+        {
+
+            if (res)
+            {
+                await raftService.SendCommit();
+                raftService._lastCommittedIndex++;
+            }
+            else
+            {
+                Console.WriteLine("Quorum is failed");
+                raftService.DeleteLastCommittedLog();
+            }
+        }
     }
 }

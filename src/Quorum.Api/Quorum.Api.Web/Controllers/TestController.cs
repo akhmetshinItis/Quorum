@@ -28,7 +28,7 @@ public class TestController : ControllerBase
     [HttpPost("replicate")]
     public async Task Replicate([FromServices] RaftService raftService)
     {
-        await raftService.SendHeartbeat();
+        await raftService.SendCommit();
     }
 
     [HttpPost("receive")]
@@ -38,4 +38,8 @@ public class TestController : ControllerBase
     {
         raftService.ReceiveLogs(logs);
     }
+
+    [HttpPost("heartbeat")]
+    public async Task Heartbeat()
+        => Ok();
 }
