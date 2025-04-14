@@ -34,7 +34,7 @@ public class RaftService
 
     public async Task SendHeartbeat()
     {
-        await _httpClient.PostAsync($"http://localhost:{5000 + 2}/api/receive", JsonContent.Create(new List<LogEntry> { _raftNode.Log[^1] }));
+        await _httpClient.PostAsync($"http://localhost:{5000 + 2}/api/receive", JsonContent.Create(new List<LogEntry>  (_raftNode.Log)));
     }
     
     public async Task ReceiveLogs(List<LogEntry> log)
@@ -44,10 +44,15 @@ public class RaftService
 
         else
         {
-            if (_raftNode.Log.Count > 0 && log[0].Id - 1 == _raftNode.Log[^1].Id)
-                _raftNode.Log = JsonSerializer.Deserialize<List<LogEntry>>(await _httpClient.GetAsync($"http://localhost:{5000 + 1}/api/entries?index={_raftNode.Log[^1].Id}").Result.Content.ReadAsStringAsync())!;
+            if (_raftNode.Log.Count > 0 && log[0].Id != _raftNode.Log[^1].Id + 1)
+            {
+                var json = await _httpClient
+                    .GetAsync($"http://localhost:{5000 + 1}/api/entries?index={_raftNode.Log[^1].Id}").Result.Content
+                    .ReadAsStringAsync();
+                _raftNode.Log = JsonSerializer.Deserialize<List<LogEntry>>(json)!;
+            }
             else
                 _raftNode.Log.Add(log[0]);
         }
     }
-}
+} 
