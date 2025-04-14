@@ -19,7 +19,8 @@ public class RaftService
         var configuration = options.Value;
         _raftNode = new RaftNode(
             configuration.Id, 
-            configuration.IsLeader ? NodeState.Leader : NodeState.Follower);
+            configuration.IsLeader ? NodeState.Leader : NodeState.Follower,
+            configuration.Followers);
     }
 
     public async Task Append(string command)
@@ -34,7 +35,8 @@ public class RaftService
 
     public async Task SendHeartbeat()
     {
-        await _httpClient.PostAsync($"http://localhost:{5000 + 2}/api/receive", JsonContent.Create(new List<LogEntry>  {_raftNode.Log[^1]}));
+        if (_raftNode.Log.Count > 0) 
+            _raftNode.Followers.ForEach(async id => await _httpClient.PostAsync($"http://localhost:{5000 + id}/api/receive", JsonContent.Create(new List<LogEntry>  {_raftNode.Log[^1]})));
     }
     
     public async Task ReceiveLogs(List<LogEntry> log)

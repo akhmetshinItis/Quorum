@@ -9,6 +9,8 @@ public class RaftNode
     public List<LogEntry> Log { get; set; }
     
     public NodeState State { get; set; }
+    
+    public List<int>? Followers { get; set; }
 
     public int LeaderId { get; set; } = 1;
     
@@ -31,8 +33,9 @@ public class RaftNode
         }
     }
 
-    public RaftNode(int id, NodeState state)
+    public RaftNode(int id, NodeState state, List<int>? followers = null)
     {
+        Followers = followers;
         Id = id;
         StateMachine = new StateMachine();
         Log = new List<LogEntry>();
