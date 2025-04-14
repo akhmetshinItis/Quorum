@@ -35,8 +35,12 @@ public class RaftService
 
     public async Task SendHeartbeat()
     {
-        if (_raftNode.Log.Count > 0) 
-            _raftNode.Followers.ForEach(async id => await _httpClient.PostAsync($"http://localhost:{5000 + id}/api/receive", JsonContent.Create(new List<LogEntry>  {_raftNode.Log[^1]})));
+        if (_raftNode.Log.Count > 0)
+            foreach (var follower in _raftNode.Followers)
+            {
+                await _httpClient.PostAsync($"http://localhost:{5000 + follower}/api/receive",
+                    JsonContent.Create(new List<LogEntry> { _raftNode.Log[^1] }));
+            }
     }
     
     public async Task ReceiveLogs(List<LogEntry> log)
