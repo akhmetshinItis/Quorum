@@ -34,14 +34,28 @@ public class RaftService
 
     public async Task SendHeartbeat()
     {
-        await _httpClient.PostAsync($"http://localhost:{5000 + 2}/api/receive", JsonContent.Create(new List<LogEntry>  (_raftNode.Log)));
+        await _httpClient.PostAsync($"http://localhost:{5000 + 2}/api/receive", JsonContent.Create(new List<LogEntry>  {_raftNode.Log[^1]}));
     }
     
     public async Task ReceiveLogs(List<LogEntry> log)
     {
         if (log.Count > 1)
-            _raftNode.Log = log;
+            _raftNode.Log.AddRange(log);
 
+        if (_raftNode.Log.Count == 0)
+        {
+            if (log[0].Id == 0)
+                _raftNode.Log.Add(log[0]);
+
+            else
+            {
+                var json = await _httpClient
+                    .GetAsync($"http://localhost:{5000 + 1}/api/entries?index=-1").Result.Content
+                    .ReadAsStringAsync();
+                _raftNode.Log.AddRange(Newtonsoft.Json.JsonConvert.DeserializeObject<List<LogEntry>>(json)!);
+            }
+        }
+        
         else
         {
             if (_raftNode.Log.Count > 0 && log[0].Id != _raftNode.Log[^1].Id + 1)
@@ -49,7 +63,7 @@ public class RaftService
                 var json = await _httpClient
                     .GetAsync($"http://localhost:{5000 + 1}/api/entries?index={_raftNode.Log[^1].Id}").Result.Content
                     .ReadAsStringAsync();
-                _raftNode.Log = JsonSerializer.Deserialize<List<LogEntry>>(json)!;
+                _raftNode.Log.AddRange(Newtonsoft.Json.JsonConvert.DeserializeObject<List<LogEntry>>(json)!);
             }
             else
                 _raftNode.Log.Add(log[0]);
