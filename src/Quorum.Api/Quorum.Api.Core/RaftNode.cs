@@ -34,7 +34,7 @@ public class RaftNode
     public int LastApplied { get; set; }
 
     private int _currentTerm = 0;
-    private readonly LoggingService? _loggingService;
+    private readonly ILoggingService? _loggingService;
 
     public int CurrentTerm
     {
@@ -49,7 +49,7 @@ public class RaftNode
         }
     }
 
-    public RaftNode(int id, NodeState state, List<int>? followers = null, LoggingService? loggingService = null)
+    public RaftNode(int id, NodeState state, List<int>? followers = null, ILoggingService? loggingService = null)
     {
         Followers = followers;
         Id = id;

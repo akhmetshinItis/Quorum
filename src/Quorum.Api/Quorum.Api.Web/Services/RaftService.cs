@@ -12,15 +12,15 @@ public class RaftService
 {
     private readonly HttpClient _httpClient;
     private readonly RaftNode _raftNode;
-    private readonly LoggingService _loggingService;
+    private readonly ILoggingService _loggingService;
     private int _logId;
     public int _lastCommittedIndex = 0;
 
-    public RaftService(IOptions<RaftOptions> options, HttpClient httpClient)
+    public RaftService(IOptions<RaftOptions> options, HttpClient httpClient, ILoggingService loggingService)
     {
         _httpClient = httpClient;
         var configuration = options.Value;
-        _loggingService = new LoggingService();
+        _loggingService = loggingService;
         _raftNode = new RaftNode(
             configuration.Id, 
             configuration.IsLeader ? NodeState.Leader : NodeState.Follower,

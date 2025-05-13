@@ -2,7 +2,7 @@ using System.Text;
 
 namespace Quorum.Api.Core;
 
-public class LoggingService
+public class LoggingService : ILoggingService
 {
     private readonly string _logFilePath;
     private readonly object _lockObject = new();

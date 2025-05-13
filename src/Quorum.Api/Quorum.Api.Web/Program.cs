@@ -1,4 +1,5 @@
 using Quartz;
+using Quorum.Api.Core;
 using Quorum.Web.Infrastructure;
 using Quorum.Web.Services;
 
@@ -14,6 +15,7 @@ services.Configure<RaftOptions>(options =>
     options.IsLeader = bool.Parse(args[1]);
     options.Followers = new List<int>(args.Skip(2).Select(int.Parse));
 });
+services.AddSingleton<ILoggingService, LoggingService>();
 services.AddSingleton<RaftService>();
 
 services.AddQuartz(q =>
