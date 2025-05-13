@@ -8,7 +8,22 @@ public class RaftNode
     
     public List<LogEntry> Log { get; set; }
     
-    public NodeState State { get; set; }
+    private NodeState _state;
+    public NodeState State
+    {
+        get => _state;
+        set
+        {
+            if (_state != value)
+            {
+                _state = value;
+                if (_loggingService != null)
+                {
+                    _loggingService.LogStateChange(Id, value);
+                }
+            }
+        }
+    }
     
     public List<int>? Followers { get; set; }
 
@@ -19,6 +34,7 @@ public class RaftNode
     public int LastApplied { get; set; }
 
     private int _currentTerm = 0;
+    private readonly LoggingService? _loggingService;
 
     public int CurrentTerm
     {
@@ -33,13 +49,14 @@ public class RaftNode
         }
     }
 
-    public RaftNode(int id, NodeState state, List<int>? followers = null)
+    public RaftNode(int id, NodeState state, List<int>? followers = null, LoggingService? loggingService = null)
     {
         Followers = followers;
         Id = id;
         StateMachine = new StateMachine();
         Log = new List<LogEntry>();
-        State = state;
+        _state = state;
+        _loggingService = loggingService;
     }
 
     public Result AppendLog(LogEntry log)
@@ -53,8 +70,6 @@ public class RaftNode
         
         return new Result(Code.RedirectToLeader, LeaderId);
     }
-
-    
 }
 
 public enum NodeState

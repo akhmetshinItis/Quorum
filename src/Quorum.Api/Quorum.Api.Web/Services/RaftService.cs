@@ -12,6 +12,7 @@ public class RaftService
 {
     private readonly HttpClient _httpClient;
     private readonly RaftNode _raftNode;
+    private readonly LoggingService _loggingService;
     private int _logId;
     public int _lastCommittedIndex = 0;
 
@@ -19,21 +20,31 @@ public class RaftService
     {
         _httpClient = httpClient;
         var configuration = options.Value;
+        _loggingService = new LoggingService();
         _raftNode = new RaftNode(
             configuration.Id, 
             configuration.IsLeader ? NodeState.Leader : NodeState.Follower,
-            configuration.Followers);
+            configuration.Followers,
+            _loggingService);
+        _loggingService.LogNodeInfo(_raftNode.Id, _raftNode.State, _raftNode.Followers);
     }
 
     public async Task Append(string command)
     {
         var result = _raftNode.AppendLog(new LogEntry(_logId++, command));
+        _loggingService.LogCommandExecution(_raftNode.Id, command, result.Code == Code.Success);
+        
         if (result.Code == Code.RedirectToLeader)
             await _httpClient.PostAsync($"http://localhost:{5000 + result.LeaderId}/api/append?command={command}", new StringContent(""));
     }
 
     public async Task<List<LogEntry>> GetEntries(int index)
-        => await Task.FromResult(_raftNode.Log.Skip(index + 1).ToList());
+    {
+        var entries = await Task.FromResult(_raftNode.Log.Skip(index + 1).ToList());
+        if (entries.Count > 0) 
+            _loggingService.LogCommandExecution(_raftNode.Id, $"Запрос логов начиная с индекса {index}, получено {entries.Count} записей", true);
+        return entries;
+    }
 
     public async Task<bool> SendCommit()
     {
@@ -54,7 +65,9 @@ public class RaftService
                     continue;
                 }
             }
-            return count >= 3; 
+            var quorumAchieved = count >= 3;
+            _loggingService.LogQuorumStatus(_raftNode.Id, quorumAchieved);
+            return quorumAchieved;
         }
         return true;
     }
@@ -79,7 +92,9 @@ public class RaftService
                 }
                 count += (bool)result?.IsSuccessStatusCode ? 1 : 0;
             }
-            return count > 1;
+            var quorumAchieved = count > 1;
+            _loggingService.LogQuorumStatus(_raftNode.Id, quorumAchieved);
+            return quorumAchieved;
         }
         return false;
     }
@@ -92,17 +107,23 @@ public class RaftService
         if (_raftNode.Log.Count == 0)
         {
             if (log[0].Id == 0)
+            {
                 _raftNode.Log.Add(log[0]);
-
+                _loggingService.LogCommandExecution(_raftNode.Id, log[0].Command, true);
+            }
             else
             {
                 var json = await _httpClient
                     .GetAsync($"http://localhost:{5000 + 1}/api/entries?index=-1").Result.Content
                     .ReadAsStringAsync();
-                _raftNode.Log.AddRange(Newtonsoft.Json.JsonConvert.DeserializeObject<List<LogEntry>>(json)!);
+                var entries = Newtonsoft.Json.JsonConvert.DeserializeObject<List<LogEntry>>(json)!;
+                _raftNode.Log.AddRange(entries);
+                foreach (var entry in entries)
+                {
+                    _loggingService.LogCommandExecution(_raftNode.Id, entry.Command, true);
+                }
             }
         }
-        
         else
         {
             if (_raftNode.Log.Count > 0 && log[0].Id != _raftNode.Log[^1].Id + 1)
@@ -110,10 +131,18 @@ public class RaftService
                 var json = await _httpClient
                     .GetAsync($"http://localhost:{5000 + 1}/api/entries?index={_raftNode.Log[^1].Id}").Result.Content
                     .ReadAsStringAsync();
-                _raftNode.Log.AddRange(Newtonsoft.Json.JsonConvert.DeserializeObject<List<LogEntry>>(json)!);
+                var entries = Newtonsoft.Json.JsonConvert.DeserializeObject<List<LogEntry>>(json)!;
+                _raftNode.Log.AddRange(entries);
+                foreach (var entry in entries)
+                {
+                    _loggingService.LogCommandExecution(_raftNode.Id, entry.Command, true);
+                }
             }
             else
+            {
                 _raftNode.Log.Add(log[0]);
+                _loggingService.LogCommandExecution(_raftNode.Id, log[0].Command, true);
+            }
         }
     }
 
