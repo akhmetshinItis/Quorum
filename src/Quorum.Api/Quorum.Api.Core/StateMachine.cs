@@ -25,7 +25,6 @@ public class StateMachine
         } 
         catch (System.FormatException) 
         { 
-            // Don't apply bad requests
         }
     }
     
@@ -41,8 +40,10 @@ public class StateMachine
 
     public void TestConnection()
     {
-        var testState = new Dictionary<string, int>();
-        testState["X"] = int.Parse("0");
+        var testState = new Dictionary<string, int>
+        {
+            ["X"] = int.Parse("0")
+        };
         testState.Clear();
     }
 

@@ -27,7 +27,7 @@ services.AddQuartz(q =>
                 .ForJob(jobKey)
                 .WithIdentity("Heartbeat-trigger")
                 .WithSimpleSchedule(x => x.
-                    WithIntervalInSeconds(15)
+                    WithIntervalInSeconds(3)
                     .RepeatForever()
                     .Build())
             );

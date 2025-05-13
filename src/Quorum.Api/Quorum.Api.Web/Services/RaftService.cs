@@ -29,7 +29,7 @@ public class RaftService
     {
         var result = _raftNode.AppendLog(new LogEntry(_logId++, command));
         if (result.Code == Code.RedirectToLeader)
-            await _httpClient.PostAsync($"http://localhost:{5000 + result.LeaderId}/api/append?command={command}", new StringContent("")); // Для уникального адреса к порту прибавляем Id лидера
+            await _httpClient.PostAsync($"http://localhost:{5000 + result.LeaderId}/api/append?command={command}", new StringContent(""));
     }
 
     public async Task<List<LogEntry>> GetEntries(int index)
@@ -39,13 +39,22 @@ public class RaftService
     {
         if (_raftNode.Log.Count > 0)
         {
-            var count = 0;
+            var count = 1;
             foreach (var follower in _raftNode.Followers)
             {
-                var result = await _httpClient.PostAsync($"http://localhost:{5000 + follower}/api/receive", JsonContent.Create(new List<LogEntry>  {_raftNode.Log[^1]}));
-                count += result.IsSuccessStatusCode ? 1 : 0;
+                try
+                {
+                    var result = await _httpClient.PostAsync(
+                        $"http://localhost:{5000 + follower}/api/receive", 
+                        JsonContent.Create(new List<LogEntry> { _raftNode.Log[^1] }));
+                    count += result.IsSuccessStatusCode ? 1 : 0;
+                }
+                catch
+                {
+                    continue;
+                }
             }
-            return count > 2;
+            return count >= 3; 
         }
         return true;
     }
