@@ -10,7 +10,7 @@
       "applicationUrl": "http://localhost:5001"
     },
     "follower1": {
-      "commandLineArgs": "2 false",
+      "commandLineArgs": "2 false 1 3 4 5",
       "commandName": "Project",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development"
@@ -18,7 +18,7 @@
       "applicationUrl": "http://localhost:5002"
     },
     "follower2": {
-      "commandLineArgs": "3 false",
+      "commandLineArgs": "3 false 1 2 4 5",
       "commandName": "Project",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development"
@@ -26,7 +26,7 @@
       "applicationUrl": "http://localhost:5003"
     },
     "follower3": {
-      "commandLineArgs": "4 false",
+      "commandLineArgs": "4 false 1 2 3 5",
       "commandName": "Project",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development"
@@ -34,7 +34,7 @@
       "applicationUrl": "http://localhost:5004"
     },
     "follower4": {
-      "commandLineArgs": "5 false",
+      "commandLineArgs": "5 false 1 2 3 4",
       "commandName": "Project",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development"

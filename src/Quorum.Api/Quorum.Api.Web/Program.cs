@@ -13,27 +13,24 @@ services.Configure<RaftOptions>(options =>
 {
     options.Id = int.Parse(args[0]);
     options.IsLeader = bool.Parse(args[1]);
-    options.Followers = new List<int>(args.Skip(2).Select(int.Parse));
+    options.AllClusterNodeIds = args.Skip(2).Select(int.Parse).ToList();
+    options.Followers = options.AllClusterNodeIds.Where(id => id != options.Id).ToList();
 });
 services.AddSingleton<ILoggingService, LoggingService>();
 services.AddSingleton<RaftService>();
 
 services.AddQuartz(q =>
 {
-    if (bool.Parse(args[1]))
-    {
-        var jobKey = new JobKey("Heartbeat");
-            q.AddJob<HeartbeatJob>(opts => opts.WithIdentity(jobKey));
-        
-            q.AddTrigger(opts => opts
-                .ForJob(jobKey)
-                .WithIdentity("Heartbeat-trigger")
-                .WithSimpleSchedule(x => x.
-                    WithIntervalInSeconds(3)
-                    .RepeatForever()
-                    .Build())
-            );
-    }
+    var jobKey = new JobKey("Heartbeat");
+    q.AddJob<HeartbeatJob>(opts => opts.WithIdentity(jobKey));
+    q.AddTrigger(opts => opts
+        .ForJob(jobKey)
+        .WithIdentity("Heartbeat-trigger")
+        .WithSimpleSchedule(x => x
+            .WithIntervalInSeconds(1)
+            .RepeatForever()
+            .Build())
+    );
 });
 services.AddQuartzHostedService(q => q.WaitForJobsToComplete = true);
 

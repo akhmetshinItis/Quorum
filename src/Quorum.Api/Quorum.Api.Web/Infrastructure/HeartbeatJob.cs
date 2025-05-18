@@ -7,21 +7,35 @@ public class HeartbeatJob(RaftService raftService) : IJob
 {
     public async Task Execute(IJobExecutionContext context)
     {
-        bool res = false;
+        if (!raftService.IsLeader)
+            return;
+
+        // Always send heartbeat to followers
+        bool heartbeatSuccess = false;
         try
         {
-            res = await raftService.SendHeartbeat();
+            heartbeatSuccess = await raftService.SendHeartbeat();
         }
         catch (Exception ex)
         {
             Console.WriteLine(ex.Message);
         }
-        finally
-        {
 
-            if (res)
+        // Only commit new entries when heartbeat succeeded and there are uncommitted logs
+        if (heartbeatSuccess && raftService.LogCount > raftService._lastCommittedIndex)
+        {
+            bool commitSuccess = false;
+            try
             {
-                await raftService.SendCommit();
+                commitSuccess = await raftService.SendCommit();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error during commit: {ex.Message}");
+            }
+
+            if (commitSuccess)
+            {
                 raftService._lastCommittedIndex++;
             }
             else

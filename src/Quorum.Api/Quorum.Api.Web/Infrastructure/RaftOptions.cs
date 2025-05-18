@@ -7,4 +7,5 @@ public class RaftOptions
     public int Id { get; set; }
     
     public List<int>? Followers { get; set; }
+    public List<int> AllClusterNodeIds { get; set; } = new List<int>();
 }

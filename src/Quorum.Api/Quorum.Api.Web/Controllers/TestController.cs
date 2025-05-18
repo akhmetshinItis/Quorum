@@ -40,6 +40,22 @@ public class TestController : ControllerBase
     }
 
     [HttpPost("heartbeat")]
-    public async Task Heartbeat()
-        => Ok();
+    public async Task<IActionResult> Heartbeat([FromServices] RaftService raftService, [FromQuery] int? leaderId = null, [FromQuery] int? term = null)
+    {
+        await raftService.HeartbeatReceived(leaderId, term);
+        return Ok();
+    }
+
+    [HttpGet("leader")]
+    public IActionResult GetLeader([FromServices] RaftService raftService)
+    {
+        return Ok(raftService.GetLeaderId());
+    }
+
+    [HttpGet("health")]
+    public IActionResult HealthCheck()
+    {
+        // This endpoint simply indicates that the node is alive and responsive.
+        return Ok();
+    }
 }
