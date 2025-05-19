@@ -30,9 +30,11 @@ public class RaftService
             _loggingService);
         _loggingService.LogNodeInfo(_raftNode.Id, _raftNode.State, _raftNode.Followers);
 
-        if (_raftNode.State != NodeState.Leader)
+        if (_raftNode.State == NodeState.Follower)
         {
-            MonitorNodes(); // Start monitoring if not leader
+            // Fetch full log from leader on follower startup
+            _ = InitializeFollowerAsync();
+            MonitorNodes(); // Start monitoring follower status
         }
     }
 
@@ -136,13 +138,40 @@ public class RaftService
         }
     }
 
+    private async Task InitializeFollowerAsync()
+    {
+        try
+        {
+            var response = await _httpClient.GetAsync($"http://localhost:{5000 + _raftNode.LeaderId}/api/entries?index=-1");
+            response.EnsureSuccessStatusCode();
+            var json = await response.Content.ReadAsStringAsync();
+            var entries = JsonSerializer.Deserialize<List<LogEntry>>(json);
+            if (entries != null)
+                await ReceiveLogs(entries);
+        }
+        catch (Exception ex)
+        {
+            _loggingService.LogCommandExecution(_raftNode.Id, $"Failed to initialize logs from leader: {ex.Message}", false);
+        }
+    }
+
     public async Task Append(string command)
     {
-        var result = _raftNode.AppendLog(new LogEntry(_logId++, command));
-        _loggingService.LogCommandExecution(_raftNode.Id, command, result.Code == Code.Success);
-        
-        if (result.Code == Code.RedirectToLeader)
-            await _httpClient.PostAsync($"http://localhost:{5000 + result.LeaderId}/api/append?command={command}", new StringContent(""));
+        if (_raftNode.State == NodeState.Leader)
+        {
+            var logEntry = new LogEntry(_logId++, command);
+            _raftNode.Log.Add(logEntry);
+            // Immediately apply command locally on leader
+            _raftNode.StateMachine.Apply(command);
+            _loggingService.LogCommandExecution(_raftNode.Id, command, true);
+        }
+        else
+        {
+            // Redirect to leader
+            await _httpClient.PostAsync(
+                $"http://localhost:{5000 + _raftNode.LeaderId}/api/append?command={command}",
+                new StringContent(""));
+        }
     }
 
     public async Task<List<LogEntry>> GetEntries(int index)
@@ -157,22 +186,25 @@ public class RaftService
     {
         if (_raftNode.Log.Count > 0)
         {
-            var count = 1;
+            var count = 1; // include leader itself
             foreach (var follower in _raftNode.Followers)
             {
                 try
                 {
                     var result = await _httpClient.PostAsync(
-                        $"http://localhost:{5000 + follower}/api/receive", 
+                        $"http://localhost:{5000 + follower}/api/receive",
                         JsonContent.Create(new List<LogEntry> { _raftNode.Log[^1] }));
-                    count += result.IsSuccessStatusCode ? 1 : 0;
+                    if (result.IsSuccessStatusCode)
+                        count++;
                 }
                 catch
                 {
-                    continue;
+                    // ignore failed follower
                 }
             }
-            var quorumAchieved = count >= 3;
+            // fixed quorum size
+            const int quorum = 3;
+            var quorumAchieved = count >= quorum;
             _loggingService.LogQuorumStatus(_raftNode.Id, quorumAchieved);
             return quorumAchieved;
         }
@@ -181,24 +213,27 @@ public class RaftService
 
     public async Task<bool> SendHeartbeat()
     {
-        var count = 0;
+        var count = 1; // include leader itself
         foreach (var follower in _raftNode.Followers)
         {
-            HttpResponseMessage result = new HttpResponseMessage();
-            result.StatusCode = HttpStatusCode.BadRequest;
             try
             {
-                result = await _httpClient.PostAsync($"http://localhost:{5000 + follower}/api/heartbeat?leaderId={_raftNode.Id}&term={_raftNode.CurrentTerm}", null);
+                var result = await _httpClient.PostAsync(
+                    $"http://localhost:{5000 + follower}/api/heartbeat?leaderId={_raftNode.Id}&term={_raftNode.CurrentTerm}",
+                    null);
+                if (result.IsSuccessStatusCode)
+                    count++;
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"Error sending heartbeat to follower {follower}: {ex.Message}");
             }
-            count += (bool)result?.IsSuccessStatusCode ? 1 : 0;
         }
-        var quorumAchieved = count > 1;
+        // fixed quorum size
+        const int quorum = 3;
+        var quorumAchieved = count >= quorum;
         _loggingService.LogQuorumStatus(_raftNode.Id, quorumAchieved);
-        return _raftNode.Followers.Count > 0;
+        return quorumAchieved;
     }
     
     public async Task ReceiveLogs(List<LogEntry> log)

@@ -40,8 +40,7 @@ public class HeartbeatJob(RaftService raftService) : IJob
             }
             else
             {
-                Console.WriteLine("Quorum is failed");
-                raftService.DeleteLastCommittedLog();
+                Console.WriteLine("Quorum is failed, retaining uncommitted log for retry");
             }
         }
     }
