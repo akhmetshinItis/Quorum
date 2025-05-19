@@ -30,6 +30,9 @@ public class RaftService
             _loggingService);
         _loggingService.LogNodeInfo(_raftNode.Id, _raftNode.State, _raftNode.Followers);
 
+        // Initialize _logId based on existing logs to avoid duplicate IDs
+        _logId = _raftNode.Log.Count > 0 ? _raftNode.Log.Max(l => l.Id) + 1 : 1;
+
         if (_raftNode.State == NodeState.Follower)
         {
             // Fetch full log from leader on follower startup
@@ -239,7 +242,12 @@ public class RaftService
     public async Task ReceiveLogs(List<LogEntry> log)
     {
         if (log.Count > 1)
+        {
             _raftNode.Log.AddRange(log);
+            // Update _logId to be higher than any received log
+            if (log.Count > 0)
+                _logId = Math.Max(_logId, log.Max(l => l.Id) + 1);
+        }
 
         if (_raftNode.Log.Count == 0)
         {
@@ -247,6 +255,7 @@ public class RaftService
             {
                 _raftNode.Log.Add(log[0]);
                 _loggingService.LogCommandExecution(_raftNode.Id, log[0].Command, true);
+                _logId = 1; // Next log should have ID 1
             }
             else
             {
@@ -259,6 +268,9 @@ public class RaftService
                 {
                     _loggingService.LogCommandExecution(_raftNode.Id, entry.Command, true);
                 }
+                // Update _logId based on received entries
+                if (entries.Count > 0)
+                    _logId = Math.Max(_logId, entries.Max(e => e.Id) + 1);
             }
         }
         else
@@ -274,11 +286,16 @@ public class RaftService
                 {
                     _loggingService.LogCommandExecution(_raftNode.Id, entry.Command, true);
                 }
+                // Update _logId based on received entries
+                if (entries.Count > 0)
+                    _logId = Math.Max(_logId, entries.Max(e => e.Id) + 1);
             }
             else
             {
                 _raftNode.Log.Add(log[0]);
                 _loggingService.LogCommandExecution(_raftNode.Id, log[0].Command, true);
+                // Update _logId if necessary
+                _logId = Math.Max(_logId, log[0].Id + 1);
             }
         }
     }
@@ -312,6 +329,6 @@ public class RaftService
     {
         if (_raftNode.State == NodeState.Leader)
             return _raftNode.Id;
-        return _raftNode.LeaderId == 0 ? null : _raftNode.LeaderId;
+        return _raftNode.LeaderId;
     }
 } 
