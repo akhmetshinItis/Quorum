@@ -22,7 +22,7 @@ public class HeartbeatJob(RaftService raftService) : IJob
             if (res)
             {
                 await raftService.SendCommit();
-                raftService._lastCommittedIndex++;
+                raftService.LastCommittedIndex++;
             }
             else
             {

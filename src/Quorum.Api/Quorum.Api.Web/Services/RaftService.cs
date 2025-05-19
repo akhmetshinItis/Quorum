@@ -1,7 +1,4 @@
 ﻿using System.Net;
-using System.Text.Json;
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Quorum.Api.Core;
 using Quorum.Web.Infrastructure;
@@ -13,7 +10,7 @@ public class RaftService
     private readonly HttpClient _httpClient;
     private readonly RaftNode _raftNode;
     private int _logId;
-    public int _lastCommittedIndex = 0;
+    public int LastCommittedIndex = 0;
 
     public RaftService(IOptions<RaftOptions> options, HttpClient httpClient)
     {
@@ -40,7 +37,7 @@ public class RaftService
         if (_raftNode.Log.Count > 0)
         {
             var count = 0;
-            foreach (var follower in _raftNode.Followers)
+            foreach (var follower in _raftNode.Followers!)
             {
                 var result = await _httpClient.PostAsync($"http://localhost:{5000 + follower}/api/receive", JsonContent.Create(new List<LogEntry>  {_raftNode.Log[^1]}));
                 count += result.IsSuccessStatusCode ? 1 : 0;
@@ -55,7 +52,7 @@ public class RaftService
         var count = 0;
         if (_raftNode.Log.Count > 0)
         {
-            foreach (var follower in _raftNode.Followers)
+            foreach (var follower in _raftNode.Followers!)
             {
                 HttpResponseMessage result = new HttpResponseMessage();
                 result.StatusCode = HttpStatusCode.BadRequest;
@@ -110,6 +107,6 @@ public class RaftService
 
     public void DeleteLastCommittedLog()
     {
-        _raftNode.Log = _raftNode.Log.Take(_lastCommittedIndex + 1).ToList();
+        _raftNode.Log = _raftNode.Log.Take(LastCommittedIndex + 1).ToList();
     }
 } 
