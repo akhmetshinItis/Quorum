@@ -36,10 +36,14 @@ public class TestController : ControllerBase
         [FromServices] RaftService raftService,
         [FromBody] List<LogEntry> logs)
     {
-        raftService.ReceiveLogs(logs);
+        await raftService.ReceiveLogs(logs);
     }
 
     [HttpPost("heartbeat")]
     public async Task Heartbeat()
-        => Ok();
+        => await Task.FromResult(Ok());
+
+    [HttpGet("isLeader")]
+    public async Task<bool> IsLeader([FromServices] RaftService raftService)
+        => await raftService.IsLeader();
 }

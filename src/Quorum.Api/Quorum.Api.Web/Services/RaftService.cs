@@ -97,7 +97,7 @@ public class RaftService
             else
             {
                 var json = await _httpClient
-                    .GetAsync($"http://localhost:{5000 + 1}/api/entries?index=-1").Result.Content
+                    .GetAsync($"http://localhost:{5000 + _raftNode.LeaderId}/api/entries?index=-1").Result.Content
                     .ReadAsStringAsync();
                 _raftNode.Log.AddRange(Newtonsoft.Json.JsonConvert.DeserializeObject<List<LogEntry>>(json)!);
             }
@@ -108,7 +108,7 @@ public class RaftService
             if (_raftNode.Log.Count > 0 && log[0].Id != _raftNode.Log[^1].Id + 1)
             {
                 var json = await _httpClient
-                    .GetAsync($"http://localhost:{5000 + 1}/api/entries?index={_raftNode.Log[^1].Id}").Result.Content
+                    .GetAsync($"http://localhost:{5000 + _raftNode.LeaderId}/api/entries?index={_raftNode.Log[^1].Id}").Result.Content
                     .ReadAsStringAsync();
                 _raftNode.Log.AddRange(Newtonsoft.Json.JsonConvert.DeserializeObject<List<LogEntry>>(json)!);
             }
@@ -121,4 +121,40 @@ public class RaftService
     {
         _raftNode.Log = _raftNode.Log.Take(_lastCommittedIndex + 1).ToList();
     }
+
+    public int GetId()
+        => _raftNode.Id;
+
+    public async Task<int> GetLeaderId()
+    {
+        for (int i = 1; i <= 5; i++)
+        {
+            if (i != _raftNode.Id)
+            {
+                var response = await _httpClient.GetAsync($"http://localhost:{5000 + i}/api/isLeader");
+                if (response.IsSuccessStatusCode && (await response.Content.ReadAsStringAsync()).Equals("true"))
+                    return i;
+            }
+        }
+        if (_raftNode.State == NodeState.Leader) return _raftNode.Id;
+
+        return -1;
+    }
+
+    public async Task<bool> IsLeader()
+        => await Task.FromResult(_raftNode.State == NodeState.Leader);
+
+    public void SetLeader(int id)
+    {
+        _raftNode.State = NodeState.Follower;
+        _raftNode.LeaderId = id;
+    }
+
+    public void BecomeLeader()
+        => _raftNode.State = NodeState.Leader;
+    
+    public async Task<bool> IsAlive(int id)
+        => (await _httpClient.PostAsync(
+            $"http://localhost:{5000 + id}/api/receive", 
+            JsonContent.Create(""))).IsSuccessStatusCode;
 } 

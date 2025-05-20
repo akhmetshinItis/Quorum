@@ -18,6 +18,22 @@ services.AddSingleton<RaftService>();
 
 services.AddQuartz(q =>
 {
+    var jobKey = new JobKey("Elections");
+
+    q.AddJob<ElectionJob>(opts => opts.WithIdentity(jobKey));
+
+    q.AddTrigger(opts => opts
+        .ForJob(jobKey)
+        .WithIdentity("Elections-trigger")
+        .WithSimpleSchedule(x => x
+            .WithIntervalInSeconds(4)
+            .RepeatForever()
+            .Build())
+    );
+});
+
+services.AddQuartz(q =>
+{
     if (bool.Parse(args[1]))
     {
         var jobKey = new JobKey("Heartbeat");
