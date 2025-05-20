@@ -48,16 +48,25 @@ public class RaftService
         {
             if (_raftNode.State == NodeState.Follower)
             {
-                // Initial delay for follower nodes to allow the leader/other nodes to start up
-                _loggingService.LogCommandExecution(_raftNode.Id, "Initial startup as follower, delaying first leader check for 10s.", true);
-                await Task.Delay(TimeSpan.FromSeconds(10));
+                // Initial delay for follower nodes to allow the leader/other nodes to start up (минимальная задержка)
+                _loggingService.LogCommandExecution(_raftNode.Id, "Initial startup as follower, delaying first leader check for 2s.", true);
+                await Task.Delay(TimeSpan.FromSeconds(2));
             }
 
+            int syncCounter = 0;
             while (true)
             {
-                // Periodic delay before each check
-                await Task.Delay(TimeSpan.FromSeconds(5)); 
+                // Periodic delay before each check (уменьшено для быстрой синхронизации)
+                await Task.Delay(TimeSpan.FromSeconds(2)); 
                 await CheckLeaderStatus();
+                
+                // Каждые несколько циклов выполняем синхронизацию коммитов у follower узлов
+                if (_raftNode.State == NodeState.Follower && ++syncCounter >= 3)
+                {
+                    syncCounter = 0;
+                    _loggingService.LogCommandExecution(_raftNode.Id, "Запланированная синхронизация коммитов", true);
+                    await InitializeFollowerAsync();
+                }
             }
         });
     }
@@ -75,7 +84,7 @@ public class RaftService
         var activeNodes = new List<int>();
         // Use a new HttpClient with a short timeout for health checks
         // to avoid long waits if a node is unresponsive.
-        using var healthCheckClient = new HttpClient { Timeout = TimeSpan.FromSeconds(2) };
+        using var healthCheckClient = new HttpClient { Timeout = TimeSpan.FromSeconds(1) };
 
         foreach (var nodeId in allNodeIds)
         {
@@ -182,8 +191,8 @@ public class RaftService
     {
         _loggingService.LogCommandExecution(_raftNode.Id, "Начинаю поиск лидера и синхронизацию коммитов...", true);
         
-        // Небольшая задержка для того, чтобы дать другим узлам возможность стартовать
-        await Task.Delay(TimeSpan.FromSeconds(3));
+        // Минимальная задержка для того, чтобы дать другим узлам возможность стартовать
+        await Task.Delay(TimeSpan.FromSeconds(1));
         
         var allNodeIds = new List<int>();
         if (_raftNode.Followers != null)
@@ -258,7 +267,7 @@ public class RaftService
         allNodeIds = allNodeIds.Distinct().OrderBy(id => id).ToList();
 
         var activeNodes = new List<int>();
-        using var healthCheckClient = new HttpClient { Timeout = TimeSpan.FromSeconds(2) };
+        using var healthCheckClient = new HttpClient { Timeout = TimeSpan.FromSeconds(1) };
 
         foreach (var nodeId in allNodeIds)
         {
