@@ -2,7 +2,6 @@
 
 using System;
 using System.Collections.Generic;
-using System.Timers;
 
 public class RaftNode
 {
@@ -81,15 +80,6 @@ public class RaftNode
         }
         
         return new Result(Code.RedirectToLeader, LeaderId);
-    }
-
-    public void BecomeCandidate()
-    {
-        State = NodeState.Candidate;
-        _votesReceived = 1; // голосует за себя
-        CurrentTerm++;
-        ResetElectionTimer();
-        _loggingService?.LogStateChange(Id, NodeState.Candidate);
     }
 
     public void ResetElectionTimer()
