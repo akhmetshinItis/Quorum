@@ -7,6 +7,7 @@ public class HeartbeatJob(RaftService raftService) : IJob
 {
     public async Task Execute(IJobExecutionContext context)
     {
+        if (!await raftService.IsLeader()) return;
         bool res = false;
         try
         {

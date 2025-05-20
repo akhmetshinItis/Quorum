@@ -12,7 +12,8 @@ services.Configure<RaftOptions>(options =>
 {
     options.Id = int.Parse(args[0]);
     options.IsLeader = bool.Parse(args[1]);
-    options.Followers = new List<int>(args.Skip(2).Select(int.Parse));
+    // Другие узлы - это числа от 1 до 5, не включая свой номер
+    options.Peers = new List<int> {1, 2, 3, 4, 5}.Except([options.Id]).ToList(); 
 });
 services.AddSingleton<RaftService>();
 
@@ -34,20 +35,17 @@ services.AddQuartz(q =>
 
 services.AddQuartz(q =>
 {
-    if (bool.Parse(args[1]))
-    {
-        var jobKey = new JobKey("Heartbeat");
-            q.AddJob<HeartbeatJob>(opts => opts.WithIdentity(jobKey));
-        
-            q.AddTrigger(opts => opts
-                .ForJob(jobKey)
-                .WithIdentity("Heartbeat-trigger")
-                .WithSimpleSchedule(x => x.
-                    WithIntervalInSeconds(3)
-                    .RepeatForever()
-                    .Build())
-            );
-    }
+    var jobKey = new JobKey("Heartbeat");
+        q.AddJob<HeartbeatJob>(opts => opts.WithIdentity(jobKey));
+    
+        q.AddTrigger(opts => opts
+            .ForJob(jobKey)
+            .WithIdentity("Heartbeat-trigger")
+            .WithSimpleSchedule(x => x.
+                WithIntervalInSeconds(3)
+                .RepeatForever()
+                .Build())
+        );
 });
 services.AddQuartzHostedService(q => q.WaitForJobsToComplete = true);
 

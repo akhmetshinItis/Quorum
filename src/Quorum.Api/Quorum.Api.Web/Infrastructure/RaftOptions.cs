@@ -6,5 +6,5 @@ public class RaftOptions
 
     public int Id { get; set; }
     
-    public List<int>? Followers { get; set; }
+    public List<int>? Peers { get; set; }
 }

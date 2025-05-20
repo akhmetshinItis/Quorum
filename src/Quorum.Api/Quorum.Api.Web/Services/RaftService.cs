@@ -1,4 +1,6 @@
 ﻿using System.Net;
+using System.Net.NetworkInformation;
+using System.Net.Sockets;
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -14,6 +16,7 @@ public class RaftService
     private readonly RaftNode _raftNode;
     private int _logId;
     public int _lastCommittedIndex = 0;
+    private readonly TcpClient _tcpClient;
 
     public RaftService(IOptions<RaftOptions> options, HttpClient httpClient)
     {
@@ -22,7 +25,8 @@ public class RaftService
         _raftNode = new RaftNode(
             configuration.Id, 
             configuration.IsLeader ? NodeState.Leader : NodeState.Follower,
-            configuration.Followers);
+            configuration.Peers);
+        _tcpClient = new TcpClient();
     }
 
     public async Task Append(string command)
@@ -40,7 +44,7 @@ public class RaftService
         if (_raftNode.Log.Count > 0)
         {
             var count = 1;
-            foreach (var follower in _raftNode.Followers)
+            foreach (var follower in _raftNode.Peers!)
             {
                 try
                 {
@@ -64,7 +68,7 @@ public class RaftService
         var count = 0;
         if (_raftNode.Log.Count > 0)
         {
-            foreach (var follower in _raftNode.Followers)
+            foreach (var follower in _raftNode.Peers)
             {
                 HttpResponseMessage result = new HttpResponseMessage();
                 result.StatusCode = HttpStatusCode.BadRequest;
@@ -131,9 +135,14 @@ public class RaftService
         {
             if (i != _raftNode.Id)
             {
-                var response = await _httpClient.GetAsync($"http://localhost:{5000 + i}/api/isLeader");
-                if (response.IsSuccessStatusCode && (await response.Content.ReadAsStringAsync()).Equals("true"))
-                    return i;
+                var isAlive = await IsAlive(i);
+                if (isAlive)
+                {
+                    var response = await _httpClient.GetAsync($"http://localhost:{5000 + i}/api/isLeader");
+                    if (response.IsSuccessStatusCode && (await response.Content.ReadAsStringAsync()).Equals("true"))
+                        return i;
+                }
+                
             }
         }
         if (_raftNode.State == NodeState.Leader) return _raftNode.Id;
@@ -152,9 +161,18 @@ public class RaftService
 
     public void BecomeLeader()
         => _raftNode.State = NodeState.Leader;
-    
+
     public async Task<bool> IsAlive(int id)
-        => (await _httpClient.PostAsync(
-            $"http://localhost:{5000 + id}/api/receive", 
-            JsonContent.Create(""))).IsSuccessStatusCode;
+    {
+        try
+        {
+            using var tcpClient = new TcpClient();
+            await tcpClient.ConnectAsync("127.0.0.1", 5000 + id);
+        }
+        catch (SocketException ex)
+        {
+            return false;
+        }
+        return true;
+    }
 } 
