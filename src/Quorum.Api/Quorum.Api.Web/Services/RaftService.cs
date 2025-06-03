@@ -1,7 +1,4 @@
-﻿using System.Net;
-using System.Text.Json;
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Logging.Abstractions;
+﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using Quorum.Api.Core;
 using Quorum.Web.Infrastructure;
@@ -30,7 +27,6 @@ public class RaftService
             _loggingService);
         _loggingService.LogNodeInfo(_raftNode.Id, _raftNode.State, _raftNode.Followers);
 
-        // Initialize _logId based on existing logs to avoid duplicate IDs
         _logId = _raftNode.Log.Count > 0 ? _raftNode.Log.Max(l => l.Id) + 1 : 1;
 
         // Если узел не лидер, то находим текущего лидера и синхронизируемся с ним
@@ -38,7 +34,7 @@ public class RaftService
         {
             // Сначала определяем лидера, затем получаем коммиты
             _ = DiscoverLeaderAndInitializeAsync();
-            MonitorNodes(); // Start monitoring follower status
+            MonitorNodes();
         }
     }
 
@@ -48,7 +44,6 @@ public class RaftService
         {
             if (_raftNode.State == NodeState.Follower)
             {
-                // Initial delay for follower nodes to allow the leader/other nodes to start up (минимальная задержка)
                 _loggingService.LogCommandExecution(_raftNode.Id, "Initial startup as follower, delaying first leader check for 2s.", true);
                 await Task.Delay(TimeSpan.FromSeconds(2));
             }
@@ -56,7 +51,6 @@ public class RaftService
             int syncCounter = 0;
             while (true)
             {
-                // Periodic delay before each check (уменьшено для быстрой синхронизации)
                 await Task.Delay(TimeSpan.FromSeconds(2)); 
                 await CheckLeaderStatus();
                 
@@ -79,18 +73,16 @@ public class RaftService
             allNodeIds.AddRange(_raftNode.Followers);
         }
         allNodeIds.Add(_raftNode.Id);
-        allNodeIds = allNodeIds.Distinct().OrderBy(id => id).ToList(); // Order by ID for priority
+        allNodeIds = allNodeIds.Distinct().OrderBy(id => id).ToList();
 
         var activeNodes = new List<int>();
-        // Use a new HttpClient with a short timeout for health checks
-        // to avoid long waits if a node is unresponsive.
         using var healthCheckClient = new HttpClient { Timeout = TimeSpan.FromSeconds(1) };
 
         foreach (var nodeId in allNodeIds)
         {
             if (nodeId == _raftNode.Id)
             {
-                activeNodes.Add(_raftNode.Id); // Current node is active
+                activeNodes.Add(_raftNode.Id);
                 continue;
             }
             try
@@ -111,17 +103,16 @@ public class RaftService
             }
         }
         
-        activeNodes.Sort(); // Ensure sorted by ID for priority
+        activeNodes.Sort();
 
         if (activeNodes.Count > 0)
         {
-            int determinedLeaderId = activeNodes[0]; // Lowest ID is the leader
+            int determinedLeaderId = activeNodes[0];
             if (_raftNode.Id == determinedLeaderId)
             {
                 if (_raftNode.State != NodeState.Leader)
                 {
                     _raftNode.State = NodeState.Leader;
-                    // LogStateChange doesn't take a custom message, using LogCommandExecution for context
                     _loggingService.LogCommandExecution(_raftNode.Id, $"Became leader as highest priority. Active nodes: {string.Join(",", activeNodes)}", true);
                 }
                 _raftNode.LeaderId = _raftNode.Id;
@@ -143,9 +134,9 @@ public class RaftService
         else
         {
             _loggingService.LogCommandExecution(_raftNode.Id, "No active nodes found (including self by direct check, which is unexpected). Remaining follower.", false);
-             if (_raftNode.State == NodeState.Leader) // If was leader but no one is active
+             if (_raftNode.State == NodeState.Leader)
             {
-                _raftNode.State = NodeState.Follower; // Step down
+                _raftNode.State = NodeState.Follower;
                 _loggingService.LogCommandExecution(_raftNode.Id, "Stepped down as leader, no active nodes found.", true);
             }
         }
@@ -273,7 +264,7 @@ public class RaftService
         {
             if (nodeId == _raftNode.Id)
             {
-                activeNodes.Add(_raftNode.Id); // Current node is active
+                activeNodes.Add(_raftNode.Id);
                 continue;
             }
             try
@@ -299,13 +290,11 @@ public class RaftService
         {
             var logEntry = new LogEntry(_logId++, command);
             _raftNode.Log.Add(logEntry);
-            // Immediately apply command locally on leader
             _raftNode.StateMachine.Apply(command);
             _loggingService.LogCommandExecution(_raftNode.Id, command, true);
         }
         else
         {
-            // Redirect to leader
             await _httpClient.PostAsync(
                 $"http://localhost:{5000 + _raftNode.LeaderId}/api/append?command={command}",
                 new StringContent(""));
@@ -324,10 +313,9 @@ public class RaftService
     {
         if (_raftNode.Log.Count > 0)
         {
-            var count = 1; // include leader itself
+            var count = 1;
             var latestLogEntry = _raftNode.Log[^1];
             
-            // Проверка и логирование последней записи
             _loggingService.LogCommandExecution(_raftNode.Id, 
                 $"Отправка последнего коммита подписчикам: ID={latestLogEntry.Id}, Command={(latestLogEntry.Command ?? "null")}", true);
             
@@ -335,7 +323,6 @@ public class RaftService
             {
                 try
                 {
-                    // Используем Newtonsoft.Json для сериализации
                     var json = Newtonsoft.Json.JsonConvert.SerializeObject(new List<LogEntry> { latestLogEntry });
                     var content = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
                     
@@ -359,7 +346,6 @@ public class RaftService
                         $"Исключение при отправке коммита узлу {follower}: {ex.Message}", false);
                 }
             }
-            // fixed quorum size
             const int quorum = 3;
             var quorumAchieved = count >= quorum;
             _loggingService.LogQuorumStatus(_raftNode.Id, quorumAchieved);
@@ -370,7 +356,7 @@ public class RaftService
 
     public async Task<bool> SendHeartbeat()
     {
-        var count = 1; // include leader itself
+        var count = 1;
         foreach (var follower in _raftNode.Followers)
         {
             try
@@ -386,7 +372,7 @@ public class RaftService
                 Console.WriteLine($"Error sending heartbeat to follower {follower}: {ex.Message}");
             }
         }
-        // fixed quorum size
+        
         const int quorum = 3;
         var quorumAchieved = count >= quorum;
         _loggingService.LogQuorumStatus(_raftNode.Id, quorumAchieved);
@@ -408,7 +394,6 @@ public class RaftService
                 _loggingService.LogCommandExecution(_raftNode.Id, $"Добавление {newLogs.Count} новых записей в лог", true);
                 _raftNode.Log.AddRange(newLogs);
                 
-                // Update _logId to be higher than any received log
                 _logId = Math.Max(_logId, newLogs.Max(l => l.Id) + 1);
                 
                 // Применяем новые команды к машине состояний
@@ -451,13 +436,12 @@ public class RaftService
                     {
                         _loggingService.LogCommandExecution(_raftNode.Id, "Добавлена запись ID=0 с пустой командой", false);
                     }
-                    _logId = 1; // Next log should have ID 1
+                    _logId = 1;
                 }
                 else
                 {
                     try
                     {
-                        // Fetch full log from current leader
                         var response = await _httpClient.GetAsync($"http://localhost:{5000 + _raftNode.LeaderId}/api/entries?index=-1");
                         response.EnsureSuccessStatusCode();
                         var json = await response.Content.ReadAsStringAsync();
@@ -478,7 +462,6 @@ public class RaftService
                                     _loggingService.LogCommandExecution(_raftNode.Id, $"Пропуск применения команды для записи ID={entry.Id}, команда null или пустая", false);
                                 }
                             }
-                            // Update _logId based on received entries
                             _logId = Math.Max(_logId, entries.Max(e => e.Id) + 1);
                         }
                     }
@@ -494,7 +477,6 @@ public class RaftService
                 {
                     try
                     {
-                        // Fetch missing entries from current leader
                         var response = await _httpClient.GetAsync($"http://localhost:{5000 + _raftNode.LeaderId}/api/entries?index={_raftNode.Log[^1].Id}");
                         response.EnsureSuccessStatusCode();
                         var json = await response.Content.ReadAsStringAsync();
@@ -515,7 +497,6 @@ public class RaftService
                                     _loggingService.LogCommandExecution(_raftNode.Id, $"Пропуск применения команды для записи ID={entry.Id}, команда null или пустая", false);
                                 }
                             }
-                            // Update _logId based on received entries
                             _logId = Math.Max(_logId, entries.Max(e => e.Id) + 1);
                         }
                     }
@@ -536,21 +517,14 @@ public class RaftService
                     {
                         _loggingService.LogCommandExecution(_raftNode.Id, $"Пропуск применения команды для записи ID={log[0].Id}, команда null или пустая", false);
                     }
-                    // Update _logId if necessary
                     _logId = Math.Max(_logId, log[0].Id + 1);
                 }
             }
         }
     }
 
-    public void DeleteLastCommittedLog()
-    {
-        _raftNode.Log = _raftNode.Log.Take(_lastCommittedIndex + 1).ToList();
-    }
-
     public async Task HeartbeatReceived([FromQuery] int? leaderId = null, [FromQuery] int? term = null)
     {
-        // Simplified: A follower updates its leader knowledge. Term logic removed for priority system.
         if (_raftNode.State != NodeState.Leader && leaderId.HasValue)
         {
             if (_raftNode.LeaderId != leaderId.Value)

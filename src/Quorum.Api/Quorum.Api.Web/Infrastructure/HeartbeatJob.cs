@@ -10,7 +10,6 @@ public class HeartbeatJob(RaftService raftService) : IJob
         if (!raftService.IsLeader)
             return;
 
-        // Always send heartbeat to followers
         bool heartbeatSuccess = false;
         try
         {
@@ -21,7 +20,6 @@ public class HeartbeatJob(RaftService raftService) : IJob
             Console.WriteLine(ex.Message);
         }
 
-        // Only commit new entries when heartbeat succeeded and there are uncommitted logs
         if (heartbeatSuccess && raftService.LogCount > raftService._lastCommittedIndex)
         {
             bool commitSuccess = false;

@@ -27,24 +27,4 @@ public class StateMachine
         { 
         }
     }
-    
-    public string RequestStatus(string param)
-    {
-        if (_state.TryGetValue(param, out var value))
-        {
-            return value.ToString();
-        }
-
-        return "";
-    }
-
-    public void TestConnection()
-    {
-        var testState = new Dictionary<string, int>
-        {
-            ["X"] = int.Parse("0")
-        };
-        testState.Clear();
-    }
-
 }

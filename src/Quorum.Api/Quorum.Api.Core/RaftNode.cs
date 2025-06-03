@@ -1,8 +1,4 @@
-﻿namespace Quorum.Api.Core;
-
-using System;
-using System.Collections.Generic;
-
+﻿namespace Quorum.Api.Core; 
 public class RaftNode
 {
     public int Id { get; set; }
@@ -31,10 +27,6 @@ public class RaftNode
     public List<int>? Followers { get; set; }
 
     public int LeaderId { get; set; } = 1;
-    
-    public int CommitIndex { get; set; }
-    
-    public int LastApplied { get; set; }
 
     private int _currentTerm = 0;
     private readonly ILoggingService? _loggingService;
@@ -80,37 +72,6 @@ public class RaftNode
         }
         
         return new Result(Code.RedirectToLeader, LeaderId);
-    }
-
-    public void ResetElectionTimer()
-    {
-        if (_electionTimer != null)
-        {
-            _electionTimer.Stop();
-            _electionTimer.Interval = GetRandomElectionTimeout();
-            _electionTimer.Start();
-            _loggingService?.LogCommandExecution(Id, $"Election timer reset", true);
-        }
-    }
-
-    public void StartElectionTimer(Action? onTimeout = null)
-    {
-        _electionTimer = new System.Timers.Timer(GetRandomElectionTimeout());
-        _electionTimer.Elapsed += (s, e) =>
-        {
-            _electionTimer.Stop();
-            _loggingService?.LogCommandExecution(Id, $"Election timer elapsed, starting election", true);
-            onTimeout?.Invoke();
-        };
-        _electionTimer.AutoReset = false;
-        _electionTimer.Start();
-        _loggingService?.LogCommandExecution(Id, $"Election timer started", true);
-    }
-
-    private int GetRandomElectionTimeout()
-    {
-        var rnd = new Random(Guid.NewGuid().GetHashCode());
-        return rnd.Next(1500, 3000); // миллисекунды, Raft рекомендует 1500-3000
     }
 }
 
